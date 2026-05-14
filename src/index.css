@@ -1,0 +1,213 @@
+:root {
+  font-family: 'Trebuchet MS', Arial, sans-serif;
+  color: #f2f3f9;
+  background: #171923;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #171923 0%, #1f2434 100%);
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem;
+  background: #2f6de0;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+#root {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.screen {
+  display: grid;
+  gap: 1rem;
+}
+
+.menu-screen {
+  text-align: center;
+  margin-top: 2.5rem;
+}
+
+.menu-buttons {
+  margin: 0 auto;
+  display: grid;
+  gap: 0.75rem;
+  width: min(280px, 100%);
+}
+
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.8rem;
+}
+
+.unit-card {
+  border: 3px solid transparent;
+  border-radius: 8px;
+  text-align: left;
+  background: #242a3d;
+  padding: 0.8rem;
+  color: #fff;
+}
+
+.unit-card.selected {
+  outline: 3px solid #4cc96a;
+}
+
+.class-pill {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  margin: 0.4rem 0;
+  font-size: 0.8rem;
+  color: #101118;
+  font-weight: 700;
+}
+
+.ability-name {
+  font-weight: 700;
+}
+
+.team-slots {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(90px, 1fr));
+  gap: 0.5rem;
+}
+
+.slot {
+  border: 2px dashed #65708f;
+  border-radius: 8px;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  background: #20273a;
+  padding: 0.35rem;
+  text-align: center;
+}
+
+.screen-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.battlefield {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 0.6rem;
+}
+
+.lane {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.enemy {
+  direction: rtl;
+}
+
+.versus {
+  display: grid;
+  place-items: center;
+  font-size: 1.4rem;
+  font-weight: 800;
+}
+
+.battle-unit {
+  background: #20273a;
+  border: 1px solid #303a56;
+  border-radius: 8px;
+  padding: 0.5rem;
+}
+
+.unit-sprite {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.unit-sprite.enemy {
+  justify-content: flex-end;
+}
+
+.pixel {
+  width: 28px;
+  height: 28px;
+  border: 2px solid #111;
+  image-rendering: pixelated;
+  position: relative;
+}
+
+.pixel-eye {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  width: 6px;
+  height: 6px;
+  background: #101118;
+}
+
+.defeated .pixel {
+  opacity: 0.35;
+}
+
+.bar-wrap {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  margin-top: 0.2rem;
+}
+
+.bar-shell {
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #101523;
+}
+
+.bar-fill {
+  height: 100%;
+}
+
+.countdown {
+  color: #f3c76f;
+  font-weight: 700;
+}
+
+.status-line {
+  margin-top: 0.3rem;
+  font-size: 0.7rem;
+  color: #b6bfd8;
+}
+
+@media (max-width: 900px) {
+  .battlefield {
+    grid-template-columns: 1fr;
+  }
+
+  .versus {
+    display: none;
+  }
+
+  .team-slots {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+}
