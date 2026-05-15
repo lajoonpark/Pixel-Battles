@@ -10,6 +10,14 @@ export type TeamType = 'player' | 'enemy'
 
 export type ActionType = 'damage' | 'healing' | 'hindrance' | 'support' | 'debuff'
 
+export type EffectVisualType =
+  | 'basicAttack'
+  | 'healing'
+  | 'buff'
+  | 'debuff'
+  | 'crowdControl'
+  | 'heavyAttack'
+
 export type StatusEffectType =
   | 'stun'
   | 'slow'
@@ -64,10 +72,24 @@ export interface BattleResult {
   winner: TeamType | 'draw'
 }
 
+export interface CombatEffectEvent {
+  id: string
+  timestamp: number
+  type: 'projectile' | 'floatingText' | 'highlight' | 'abilityCallout'
+  sourceKey?: string
+  targetKey?: string
+  unitKey?: string
+  highlightRole?: 'attacker' | 'target'
+  visualType: EffectVisualType
+  text?: string
+  durationMs?: number
+}
+
 export interface BattleState {
   units: Unit[]
   elapsed: number
   countdown: number
   started: boolean
   result: BattleResult | null
+  combatEvents: CombatEffectEvent[]
 }

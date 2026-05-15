@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_ENEMY_TEAM_IDS } from '../data/enemies'
 import { STARTER_CHARACTER_MAP } from '../data/characters'
 import { createBattleState, stepCombat } from '../game/combat'
@@ -6,6 +6,7 @@ import { CLASS_COLORS } from '../data/classes'
 import { HealthBar } from './HealthBar'
 import { UnitSprite } from './UnitSprite'
 import type { CharacterDefinition } from '../types/game'
+import { BattleEffectsLayer } from './BattleEffectsLayer'
 
 interface BattleScreenProps {
   playerTeam: CharacterDefinition[]
@@ -20,6 +21,7 @@ export function BattleScreen({ playerTeam, onBattleEnd, onBack }: BattleScreenPr
   )
 
   const [battleState, setBattleState] = useState(() => createBattleState(playerTeam, enemyTeam))
+  const battlefieldRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     const tick = 0.12
@@ -43,10 +45,15 @@ export function BattleScreen({ playerTeam, onBattleEnd, onBack }: BattleScreenPr
     <section className="screen battle-screen">
       <h2>Battle</h2>
       {!battleState.started && <p className="countdown">Starting in {battleState.countdown.toFixed(1)}...</p>}
-      <div className="battlefield">
+      <div className="battlefield" ref={battlefieldRef}>
+        <BattleEffectsLayer battlefieldRef={battlefieldRef} events={battleState.combatEvents} />
         <div className="lane">
           {playerUnits.map((unit) => (
-            <article key={`${unit.team}-${unit.position}`} className="battle-unit">
+            <article
+              key={`${unit.team}-${unit.position}`}
+              className="battle-unit"
+              data-unit-key={`${unit.team}-${unit.position}`}
+            >
               <UnitSprite unit={unit} />
               <HealthBar label="HP" current={unit.currentHp} max={unit.maxHp} color="#4cc96a" />
               <HealthBar label="EN" current={unit.energy} max={unit.maxEnergy} color="#43a0ff" />
@@ -67,7 +74,11 @@ export function BattleScreen({ playerTeam, onBattleEnd, onBack }: BattleScreenPr
         <div className="versus">VS</div>
         <div className="lane enemy">
           {enemyUnits.map((unit) => (
-            <article key={`${unit.team}-${unit.position}`} className="battle-unit">
+            <article
+              key={`${unit.team}-${unit.position}`}
+              className="battle-unit"
+              data-unit-key={`${unit.team}-${unit.position}`}
+            >
               <UnitSprite unit={unit} />
               <HealthBar label="HP" current={unit.currentHp} max={unit.maxHp} color="#4cc96a" />
               <HealthBar label="EN" current={unit.energy} max={unit.maxEnergy} color="#43a0ff" />

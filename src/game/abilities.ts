@@ -1,7 +1,14 @@
 import { getTarget } from './targeting'
 import { addStatusEffect } from './statusEffects'
 import { applyDamage, applyHeal, calculateBasicAttackDamage, sameUnit } from './combatUtils'
-import type { Unit } from '../types/game'
+import {
+  appendAbilityCallout,
+  appendAttackOutcome,
+  appendHealingOutcome,
+  appendStatusEffectText,
+  visualTypeForAction,
+} from './effects'
+import type { CombatEffectEvent, EffectVisualType, StatusEffect, Unit } from '../types/game'
 
 function replaceUnit(units: Unit[], nextUnit: Unit): Unit[] {
   return units.map((unit) => (sameUnit(unit, nextUnit) ? nextUnit : unit))
@@ -27,7 +34,81 @@ function findLowestHpEnemy(units: Unit[], team: Unit['team']): Unit | null {
   return [...enemies].sort((a, b) => a.currentHp / a.maxHp - b.currentHp / b.maxHp)[0]
 }
 
-export function executeAbility(actor: Unit, units: Unit[]): Unit[] {
+function applyDamageWithEffects(
+  units: Unit[],
+  actor: Unit,
+  target: Unit | null,
+  rawDamage: number,
+  visualType: EffectVisualType,
+  events: CombatEffectEvent[],
+  timestamp: number,
+): Unit[] {
+  if (!target) {
+    return units
+  }
+  return units.map((unit) => {
+    if (!sameUnit(unit, target)) {
+      return unit
+    }
+    const next = applyDamage(unit, rawDamage)
+    appendAttackOutcome(events, actor, unit, next, timestamp, visualType)
+    return next
+  })
+}
+
+function applyHealWithEffects(
+  units: Unit[],
+  actor: Unit,
+  target: Unit | null,
+  amount: number,
+  events: CombatEffectEvent[],
+  timestamp: number,
+): Unit[] {
+  if (!target) {
+    return units
+  }
+  return units.map((unit) => {
+    if (!sameUnit(unit, target)) {
+      return unit
+    }
+    const next = applyHeal(unit, amount)
+    appendHealingOutcome(events, actor, unit, next, timestamp)
+    return next
+  })
+}
+
+function applyStatusWithEffects(
+  units: Unit[],
+  actor: Unit,
+  target: Unit | null,
+  status: StatusEffect,
+  visualType: EffectVisualType,
+  events: CombatEffectEvent[],
+  timestamp: number,
+): Unit[] {
+  if (!target) {
+    return units
+  }
+  return units.map((unit) => {
+    if (!sameUnit(unit, target)) {
+      return unit
+    }
+    const next = addStatusEffect(unit, status)
+    appendAttackOutcome(events, actor, unit, next, timestamp, visualType)
+    appendStatusEffectText(events, unit, status, timestamp)
+    return next
+  })
+}
+
+export function executeAbility(
+  actor: Unit,
+  units: Unit[],
+  events: CombatEffectEvent[],
+  timestamp: number,
+): Unit[] {
+  const baseVisual = visualTypeForAction(actor.ability.actionType)
+  appendAbilityCallout(events, actor, actor.ability.name, baseVisual, timestamp)
+
   switch (actor.ability.id) {
     case 'ground-slam': {
       const enemies = aliveTeam(units, actor.team === 'player' ? 'enemy' : 'player')
@@ -36,43 +117,72 @@ export function executeAbility(actor: Unit, units: Unit[]): Unit[] {
         ? [target, ...enemies.filter((enemy) => !sameUnit(enemy, target))]
         : enemies
       return ordered.slice(0, 2).reduce((accUnits, enemy, index) => {
-        let updated = applyToTarget(accUnits, enemy, (current) =>
-          applyDamage(current, calculateBasicAttackDamage(actor, current) + 22),
+        let updated = applyDamageWithEffects(
+          accUnits,
+          actor,
+          enemy,
+          calculateBasicAttackDamage(actor, enemy) + 22,
+          'crowdControl',
+          events,
+          timestamp,
         )
         if (index === 0) {
-          updated = applyToTarget(updated, enemy, (current) =>
-            addStatusEffect(current, { type: 'stun', value: 1, duration: 1 }),
+          updated = applyStatusWithEffects(
+            updated,
+            actor,
+            enemy,
+            { type: 'stun', value: 1, duration: 1 },
+            'crowdControl',
+            events,
+            timestamp,
           )
         }
         return updated
       }, units)
     }
     case 'fortify': {
-      return applyToTarget(units, actor, (current) =>
-        addStatusEffect(
-          addStatusEffect(current, {
-            type: 'shield',
-            value: 160,
-            duration: 4,
-          }),
-          {
-            type: 'taunt',
-            value: 1,
-            duration: 2.5,
-          },
-        ),
+      let updated = applyStatusWithEffects(
+        units,
+        actor,
+        actor,
+        { type: 'shield', value: 160, duration: 4 },
+        'buff',
+        events,
+        timestamp,
       )
+      updated = applyStatusWithEffects(
+        updated,
+        actor,
+        actor,
+        { type: 'taunt', value: 1, duration: 2.5 },
+        'buff',
+        events,
+        timestamp,
+      )
+      return updated
     }
     case 'backline-blink': {
       const target = getTarget(actor, units, 'damage')
-      return applyToTarget(units, target, (current) =>
-        applyDamage(current, calculateBasicAttackDamage(actor, current) + 80),
+      return applyDamageWithEffects(
+        units,
+        actor,
+        target,
+        target ? calculateBasicAttackDamage(actor, target) + 80 : 0,
+        'heavyAttack',
+        events,
+        timestamp,
       )
     }
     case 'weak-spot': {
       const target = findLowestHpEnemy(units, actor.team)
-      return applyToTarget(units, target, (current) =>
-        applyDamage(current, calculateBasicAttackDamage(actor, current) + 100),
+      return applyDamageWithEffects(
+        units,
+        actor,
+        target,
+        target ? calculateBasicAttackDamage(actor, target) + 100 : 0,
+        'heavyAttack',
+        events,
+        timestamp,
       )
     }
     case 'sweet-heal': {
@@ -80,12 +190,14 @@ export function executeAbility(actor: Unit, units: Unit[]): Unit[] {
         if (unit.team !== actor.team || !unit.isAlive) {
           return unit
         }
-        return applyHeal(unit, 90)
+        const next = applyHeal(unit, 90)
+        appendHealingOutcome(events, actor, unit, next, timestamp)
+        return next
       })
     }
     case 'emergency-patch': {
       const target = getTarget(actor, units, 'healing')
-      return applyToTarget(units, target, (current) => applyHeal(current, 165))
+      return applyHealWithEffects(units, actor, target, 165, events, timestamp)
     }
     case 'freeze-pulse': {
       const target = getTarget(actor, units, 'hindrance')
@@ -94,22 +206,46 @@ export function executeAbility(actor: Unit, units: Unit[]): Unit[] {
         ? [target, ...enemies.filter((enemy) => !sameUnit(enemy, target))]
         : enemies
       return ordered.slice(0, 2).reduce((accUnits, enemy) => {
-        let updated = applyToTarget(accUnits, enemy, (current) =>
-          applyDamage(current, calculateBasicAttackDamage(actor, current) + 32),
+        let updated = applyDamageWithEffects(
+          accUnits,
+          actor,
+          enemy,
+          calculateBasicAttackDamage(actor, enemy) + 32,
+          'crowdControl',
+          events,
+          timestamp,
         )
-        updated = applyToTarget(updated, enemy, (current) =>
-          addStatusEffect(current, { type: 'stun', value: 1, duration: 0.8 }),
+        updated = applyStatusWithEffects(
+          updated,
+          actor,
+          enemy,
+          { type: 'stun', value: 1, duration: 0.8 },
+          'crowdControl',
+          events,
+          timestamp,
         )
         return updated
       }, units)
     }
     case 'bad-luck': {
       const target = getTarget(actor, units, 'debuff')
-      let updated = applyToTarget(units, target, (current) =>
-        addStatusEffect(current, { type: 'attackDown', value: 0.25, duration: 4 }),
+      let updated = applyStatusWithEffects(
+        units,
+        actor,
+        target,
+        { type: 'attackDown', value: 0.25, duration: 4 },
+        'debuff',
+        events,
+        timestamp,
       )
-      updated = applyToTarget(updated, target, (current) =>
-        addStatusEffect(current, { type: 'cooldownDelay', value: 1.5, duration: 4 }),
+      updated = applyStatusWithEffects(
+        updated,
+        actor,
+        target,
+        { type: 'cooldownDelay', value: 1.5, duration: 4 },
+        'debuff',
+        events,
+        timestamp,
       )
       return updated
     }
@@ -120,8 +256,14 @@ export function executeAbility(actor: Unit, units: Unit[]): Unit[] {
       }
       return [1, 2, 3].reduce(
         (accUnits) =>
-          applyToTarget(accUnits, target, (current) =>
-            applyDamage(current, calculateBasicAttackDamage(actor, current) + 10),
+          applyDamageWithEffects(
+            accUnits,
+            actor,
+            target,
+            calculateBasicAttackDamage(actor, target) + 10,
+            'basicAttack',
+            events,
+            timestamp,
           ),
         units,
       )
@@ -133,10 +275,16 @@ export function executeAbility(actor: Unit, units: Unit[]): Unit[] {
       }
       const enemies = aliveTeam(units, actor.team === 'player' ? 'enemy' : 'player')
       const splash = enemies.find((enemy) => !sameUnit(enemy, target)) ?? null
-      let updated = applyToTarget(units, target, (current) =>
-        applyDamage(current, calculateBasicAttackDamage(actor, current) + 70),
+      let updated = applyDamageWithEffects(
+        units,
+        actor,
+        target,
+        calculateBasicAttackDamage(actor, target) + 70,
+        'heavyAttack',
+        events,
+        timestamp,
       )
-      updated = applyToTarget(updated, splash, (current) => applyDamage(current, 25))
+      updated = applyDamageWithEffects(updated, actor, splash, 25, 'heavyAttack', events, timestamp)
       return updated
     }
     case 'bubble-shield': {
@@ -144,11 +292,15 @@ export function executeAbility(actor: Unit, units: Unit[]): Unit[] {
         if (unit.team !== actor.team || !unit.isAlive) {
           return unit
         }
-        return addStatusEffect(unit, {
+        const shieldStatus: StatusEffect = {
           type: 'shield',
           value: 95,
           duration: 6,
-        })
+        }
+        const next = addStatusEffect(unit, shieldStatus)
+        appendAttackOutcome(events, actor, unit, next, timestamp, 'buff')
+        appendStatusEffectText(events, unit, shieldStatus, timestamp)
+        return next
       })
     }
     case 'quick-tune': {
@@ -157,8 +309,14 @@ export function executeAbility(actor: Unit, units: Unit[]): Unit[] {
       if (!target) {
         return units
       }
-      let updated = applyToTarget(units, target, (current) =>
-        addStatusEffect(current, { type: 'attackSpeedUp', value: 0.35, duration: 4.5 }),
+      let updated = applyStatusWithEffects(
+        units,
+        actor,
+        target,
+        { type: 'attackSpeedUp', value: 0.35, duration: 4.5 },
+        'buff',
+        events,
+        timestamp,
       )
       updated = applyToTarget(updated, target, (current) => ({
         ...current,

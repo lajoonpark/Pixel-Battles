@@ -2,6 +2,7 @@ import { executeAbility } from './abilities'
 import { gainEnergy, applyDamage, calculateBasicAttackDamage, sameUnit } from './combatUtils'
 import { getTarget } from './targeting'
 import { getEffectiveAttackSpeed, isStunned, reduceStatusDurations } from './statusEffects'
+import { appendAttackOutcome } from './effects'
 import type { BattleState, CharacterDefinition, TeamType, Unit } from '../types/game'
 
 function toUnit(character: CharacterDefinition, team: TeamType, position: number): Unit {
@@ -32,6 +33,7 @@ export function createBattleState(
     countdown: 2,
     started: false,
     result: null,
+    combatEvents: [],
   }
 }
 
@@ -65,13 +67,17 @@ export function stepCombat(state: BattleState, delta: number): BattleState {
 
   if (!state.started) {
     const nextCountdown = Math.max(0, state.countdown - delta)
+    const nextElapsed = state.elapsed + delta
     return {
       ...state,
-      elapsed: state.elapsed + delta,
+      elapsed: nextElapsed,
       countdown: nextCountdown,
       started: nextCountdown === 0,
+      combatEvents: state.combatEvents.filter((event) => nextElapsed - event.timestamp <= 2.2),
     }
   }
+
+  const combatEvents: BattleState['combatEvents'] = []
 
   let units = state.units.map((unit) => {
     if (!unit.isAlive) {
@@ -101,7 +107,7 @@ export function stepCombat(state: BattleState, delta: number): BattleState {
     }
 
     if (actor.currentCooldown <= 0 && actor.energy >= actor.maxEnergy) {
-      units = executeAbility(actor, units)
+      units = executeAbility(actor, units, combatEvents, state.elapsed)
       const refreshedActor = units.find((unit) => sameUnit(unit, actor))
       if (refreshedActor) {
         units = updateUnit(units, {
@@ -138,18 +144,25 @@ export function stepCombat(state: BattleState, delta: number): BattleState {
 
     units = units.map((unit) => {
       if (sameUnit(unit, target)) {
-        return applyDamage(unit, damage)
+        const next = applyDamage(unit, damage)
+        appendAttackOutcome(combatEvents, actor, unit, next, state.elapsed, 'basicAttack')
+        return next
       }
       return unit
     })
   }
 
   const result = checkBattleResult(units)
+  const nextElapsed = state.elapsed + delta
+  const nextCombatEvents = [...state.combatEvents, ...combatEvents].filter(
+    (event) => nextElapsed - event.timestamp <= 2.2,
+  )
 
   return {
     ...state,
     units,
-    elapsed: state.elapsed + delta,
+    elapsed: nextElapsed,
     result,
+    combatEvents: nextCombatEvents,
   }
 }
